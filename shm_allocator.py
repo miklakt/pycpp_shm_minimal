@@ -45,6 +45,7 @@ class SharedMemoryAllocator:
         self.create_new = create_new
         self.shm = None
         self.fields = {}  # Will hold the actual NumPy arrays (keyed by field name)
+        self.layout_info = []   # list of { 'name', 'dtype', 'shape', 'offset' }
         self._parse_and_allocate_or_connect()
 
     def _parse_spec(self):
@@ -52,20 +53,18 @@ class SharedMemoryAllocator:
         Loads the JSON spec, computes total size, and returns:
           - shm_name: the name of the shared memory segment
           - total_size: total byte size needed
-          - layout_info: list of { 'name', 'dtype', 'shape', 'offset' }
         """
         spec = json.loads(Path(self.spec_file).read_text())
-        layout_info = []
         current_offset = 0
 
         # Variables (scalars)
         for var in spec.get("variables", []):
             dt = spec_to_dtype(var["type"])
             size_bytes = dt.itemsize
-            layout_info.append({
+            self.layout_info.append({
                 "name": var["name"],
                 "dtype": dt,
-                "shape": None,  # indicates scalar
+                "shape": (),  # indicates scalar
                 "offset": current_offset
             })
             current_offset += size_bytes
@@ -76,7 +75,7 @@ class SharedMemoryAllocator:
             shape = arr["shape"]
             num_elems = np.prod(shape)
             size_bytes = dt.itemsize * num_elems
-            layout_info.append({
+            self.layout_info.append({
                 "name": arr["name"],
                 "dtype": dt,
                 "shape": shape,
@@ -84,11 +83,11 @@ class SharedMemoryAllocator:
             })
             current_offset += size_bytes
 
-        return spec["shm_name"], current_offset, layout_info
+        return spec["shm_name"], current_offset
 
     def _parse_and_allocate_or_connect(self):
         # 1) Parse the JSON spec
-        shm_name, total_size, layout_info = self._parse_spec()
+        shm_name, total_size = self._parse_spec()
 
         # 2) Create or connect to the shared memory
         if self.create_new:
@@ -122,16 +121,11 @@ class SharedMemoryAllocator:
             print(f"[SharedMemoryAllocator] Connected to existing shared memory '{shm_name}' ({total_size} bytes).")
 
         # 3) Create NumPy arrays mapped onto the shared memory buffer
-        for item in layout_info:
+        for item in self.layout_info:
             offset = item["offset"]
             dtype = item["dtype"]
             print(f"Offset: {offset}")
-            if item["shape"] is None:
-                # Scalar => store as shape ()
-                arr = np.ndarray((), dtype=dtype, buffer=self.shm.buf, offset=offset)
-            else:
-                arr = np.ndarray(item["shape"], dtype=dtype, buffer=self.shm.buf, offset=offset)
-            
+            arr = np.ndarray(item["shape"], dtype=dtype, buffer=self.shm.buf, offset=offset)
             # Store in a dictionary for easy access
             self.fields[item["name"]] = arr
 
@@ -176,6 +170,95 @@ class SharedMemoryAllocator:
         Destructor: ensure resources are released if not closed manually.
         """
         self.close(unlink=False)
+#-------------------------------------------------------------------------------
+#----C++ headers code-generations-----------------------------------------------
+#-------------------------------------------------------------------------------
+    def _numpy_dtype_to_cpp(self, dtype: str) -> str:
+        """
+        Map NumPy dtype strings to C++ types.
+        Extend this method to support more types as needed.
+        """
+        mapping = {
+            np.dtype("int8")    : "int8_t",
+            np.dtype("uint8")   : "uint8_t",
+            np.dtype("int16")   : "int16_t",
+            np.dtype("uint16")  : "uint16_t",
+            np.dtype("int32")   : "int32_t",
+            np.dtype("uint32")  : "uint32_t",
+            np.dtype("int64")   : "int64_t",
+            np.dtype("uint64")  : "uint64_t",
+            np.dtype("float32") : "float",
+            np.dtype("float64") : "double",
+        }
+        return mapping.get(dtype, None)
+
+    def generate_cpp_header(self, output_file : str = "shared_memory_layout"):
+        """
+        Generates a C++ header that defines compile-time offsets for each field
+        found in `self.layout_info`. We place them in a namespace SharedMemoryLayout
+        with a tag struct for each field, plus a `template <typename Tag> struct field_info;`
+        specializations.
+
+        Example usage:
+            allocator.generate_cpp_header("shm_offsets.hpp")
+        """
+        # We'll create lines in a list, then write them out at the end
+        lines = []
+        lines.append("#pragma once")
+        lines.append("// This file is AUTO-GENERATED from the SharedMemoryAllocator class. Do not edit manually.")
+        lines.append("#include <cstddef>")
+        lines.append("")
+        spec = json.loads(Path(self.spec_file).read_text())
+        lines.append(f"inline constexpr const char* SHM_NAME = \"{spec["shm_name"]}\";\n")
+        lines.append("")
+        lines.append("namespace SharedMemoryLayout {")
+        lines.append("")
+
+        # 1) For each field name, generate a unique tag
+        for item in self.layout_info:
+            name = item["name"]
+            tag_name = f"{name}_tag"
+            lines.append(f"    struct {tag_name} {{}};")
+
+        lines.append("")
+        # 2) Primary template for field_info<Tag>
+        lines.append("    template <typename Tag>")
+        lines.append("    struct field_info; // forward declaration (no definition)")
+        lines.append("")
+
+        # 3) Specializations
+        for item in self.layout_info:
+            name = item["name"]
+            offset = item["offset"]
+            tag_name = f"{name}_tag"
+            shape = item["shape"]
+            dtype = item["dtype"]
+            cpp_type = self._numpy_dtype_to_cpp(dtype)
+            if cpp_type is None:
+                raise ValueError(f"Unsupported NumPy dtype: {dtype}")
+            if shape == ():
+                type_str = cpp_type
+            else:
+                # Create C++ array type, e.g., float[2][3]
+                type_str = cpp_type + ''.join([f'[{x}]' for x in shape])
+
+
+
+            lines.append(f"    template <>")
+            lines.append(f"    struct field_info<{tag_name}> {{")
+            lines.append(f"        using type = {type_str};")
+            lines.append(f"        static constexpr std::size_t value = {offset};")
+            lines.append("    };")
+            lines.append("")
+
+        lines.append("} // namespace SharedMemoryLayout")
+        lines.append("")
+
+        # Write to file
+        code = "\n".join(lines)
+        Path(output_file).write_text(code, encoding="utf-8")
+        print(f"[SharedMemoryAllocator] Generated C++ header: {output_file}")
+
 #%%
 allocator = SharedMemoryAllocator("shm_layout.json", create_new=True)
 #%%
@@ -184,3 +267,6 @@ print("myint =", allocator.fields["myint"])
 print("myarr =\n", allocator.fields["myarr"])
 # Do not close/unlink yet if we want another process to attach...
 # allocator_new.close()
+# %%
+allocator.generate_cpp_header("src/shared_memory_layout.hxx")
+# %%

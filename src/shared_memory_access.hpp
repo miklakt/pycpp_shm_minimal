@@ -8,7 +8,9 @@
 #include <unistd.h>   // close, lseek
 #include <cstring>    // strerror
 
-//
+#include "shared_memory_layout.hxx"
+
+//------------------------------------------------------------------------------
 // Meta-function that builds T[D1][D2]...[Dn] out of T and variadic Dims.
 //
 // Example: NDArray<float, 2,3>::type is float[2][3].
@@ -28,24 +30,25 @@ struct NDArray<T, First, Rest...> {
 };
 
 //
-// 2. Helper alias: NDPtr<T, D1, D2, ...> => "pointer to T[D1][D2]..."
+// Helper alias: NDPtr<T, D1, D2, ...> => "pointer to T[D1][D2]..."
 //
 template <typename T, std::size_t... Dims>
 using NDPtr = typename NDArray<T, Dims...>::type*;
 
+//------------------------------------------------------------------------------
 //
-// 3. The variadic template function that:
+// The variadic template function that:
 //    - Opens the named shared memory
 //    - mmaps the entire segment
 //    - Returns NDPtr<T, Dims...> (pointer to T[D1][D2]...[Dn])
 //
-template <typename T, std::size_t... Dims>
-NDPtr<T, Dims...> mapSharedMemoryVariadic(const std::string& shmName, std::size_t offset = 0)
+template <typename T, std::size_t offset, std::size_t... Dims>
+NDPtr<T, Dims...> mapSharedMemoryVariadic()
 {
     // 1) Open existing shared memory (created by Python or another process).
-    int fd = shm_open(shmName.c_str(), O_RDWR, 0666);
+    int fd = shm_open(SHM_NAME, O_RDWR, 0666);
     if (fd < 0) {
-        throw std::runtime_error("Failed to open shared memory '" + shmName + "': " + std::strerror(errno));
+        throw std::runtime_error("Failed to open shared memory '" + std::string(SHM_NAME) + "': " + std::strerror(errno));
     }
 
     // 2) Determine the total size so we can map the entire region.
