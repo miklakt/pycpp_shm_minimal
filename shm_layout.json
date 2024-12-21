@@ -1,0 +1,21 @@
+{
+    "shm_name": "my_shm_name",
+    "variables": [
+      {
+        "name": "myint",
+        "type": "int32"
+      },
+      {
+        "name": "myfloat",
+        "type": "float32"
+      }
+    ],
+    "arrays": [
+      {
+        "name": "myarr",
+        "type": "float32",
+        "shape": [100, 200]
+      }
+    ]
+}
+  
