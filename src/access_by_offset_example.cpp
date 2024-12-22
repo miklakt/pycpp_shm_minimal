@@ -14,7 +14,7 @@ int main()
         *scalar_ptr += 10;
         std::cout << "Scalar after modification: " << *scalar_ptr << "\n";
 
-        const uint8_t nx=100, ny=200, offset=8;
+        const uint8_t nx=8, ny=10, offset=8;
 
 
         // map array of floats

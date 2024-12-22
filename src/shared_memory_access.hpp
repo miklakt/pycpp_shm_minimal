@@ -74,10 +74,10 @@ NDPtr<T, Dims...> mapSharedMemoryVariadic()
 }
 
 //------------------------------------------------------------------------------
-// The `Get` template function that uses a tag from `SharedMemoryLayout` to map shared memory.
+// The `getSharedMemoryFieldPtr` template function that uses a tag from `SharedMemoryLayout` to map shared memory.
 //
 // Example usage:
-//    auto myfield = Get<SharedMemoryLayout::myfield_tag>();
+//    auto myfield = getSharedMemoryFieldPtr<SharedMemoryLayout::myfield_tag>();
 //------------------------------------------------------------------------------
 template <typename Tag>
 auto getSharedMemoryFieldPtr()

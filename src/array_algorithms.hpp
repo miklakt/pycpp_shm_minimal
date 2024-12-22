@@ -1,45 +1,44 @@
-#include <iostream>
-#include <cmath>   // For boundary conditions
 #include <tuple>
 #include <type_traits>
+#include <cstddef>
+#include <iostream>
+#include <utility> // for std::forward
 
-// Recursive dimension extractor
-template <typename T, typename = void>
-struct ExtractDimensions;
+#include "shared_memory_layout.hxx"
+#include "shared_memory_access.hpp"
 
-template <typename T>
-struct ExtractDimensions<T, std::enable_if_t<std::is_array_v<T>>> {
-    static constexpr std::size_t size = std::extent_v<T>;
-    using Subarray = std::remove_extent_t<T>;
-    using Next = ExtractDimensions<Subarray>;
-
-    static constexpr auto as_tuple() {
-        if constexpr (std::is_array_v<Subarray>) {
-            return std::tuple_cat(std::make_tuple(size), Next::as_tuple());
+//------------------------------------------------------------------------------
+// Recursive helper to iterate through multi-dimensional arrays and apply a function
+//------------------------------------------------------------------------------
+template <typename T, typename Func, std::size_t N>
+void ApplyFunctionElementwiseImpl(T (&array)[N], Func&& func) {
+    for (std::size_t i = 0; i < N; ++i) {
+        if constexpr (std::is_array_v<T>) {
+            // Recursive case: apply function to sub-array
+            ApplyFunctionElementwiseImpl(array[i], std::forward<Func>(func));
         } else {
-            return std::make_tuple(size);
-        }
-    }
-};
-
-// Helper to get dimensions as a tuple
-template <typename T>
-constexpr auto GetDimensions() {
-    return ExtractDimensions<T>::as_tuple();
-}
-
-// Recursive traversal function to apply diffusion
-template <typename ArrayType, typename CoordType, typename Func>
-void traverse_and_apply(ArrayType& array, CoordType& indices, Func&& func, std::size_t dim_index = 0) {
-    constexpr auto dims = GetDimensions<ArrayType>();
-    if constexpr (dim_index == std::tuple_size_v<decltype(dims)>) {
-        // Base case: all dimensions specified, apply function
-        func(indices);
-    } else {
-        // Recursive case: iterate over current dimension
-        for (std::size_t i = 0; i < std::get<dim_index>(dims); ++i) {
-            indices[dim_index] = i;
-            traverse_and_apply(array, indices, func, dim_index + 1);
+            // Base case: apply function to scalar element
+            func(array[i]);
         }
     }
 }
+
+//------------------------------------------------------------------------------
+// ApplyFunction: Apply an element-wise function to an array given its tag
+//------------------------------------------------------------------------------
+template <typename Tag, typename Func>
+void ApplyFunctionElementwise(Func&& func) {
+    // 1. Get the array type and pointer using the tag
+    using ArrayType = typename SharedMemoryLayout::field_info<Tag>::type;
+
+    // Ensure it is an array type
+    static_assert(std::is_array_v<ArrayType>, "Tag must correspond to an array type.");
+
+    // 2. Map the shared memory field using the tag
+    auto arrayPtr = getSharedMemoryFieldPtr<Tag>();
+
+    // 3. Apply the function to the array
+    ApplyFunctionElementwiseImpl(*arrayPtr, std::forward<Func>(func));
+}
+
+

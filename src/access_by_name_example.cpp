@@ -22,10 +22,13 @@ int main()
         // map array of floats
         auto arr2d = getSharedMemoryFieldPtr<SharedMemoryLayout::myarr_tag>();
 
-        for (int i = 0; i < 10; i++) {
+        int k = 0;
+        //No bounds check, unsafe!
+        for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 10; j++) {
                 std::cout << i << "\t" << j << "\n";
-                (*arr2d)[i][j] = i+j;
+                (*arr2d)[i][j] = k;
+                k++;
             }
         }
 
@@ -34,3 +37,5 @@ int main()
     }
     return 0;
 }
+
+

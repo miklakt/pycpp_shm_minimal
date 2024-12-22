@@ -14,7 +14,7 @@
       {
         "name": "myarr",
         "type": "float32",
-        "shape": [100, 200]
+        "shape": [8, 12]
       }
     ]
 }
