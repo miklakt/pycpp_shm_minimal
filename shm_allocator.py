@@ -247,7 +247,7 @@ class SharedMemoryAllocator:
             lines.append(f"    template <>")
             lines.append(f"    struct field_info<{tag_name}> {{")
             lines.append(f"        using type = {type_str};")
-            lines.append(f"        static constexpr std::size_t value = {offset};")
+            lines.append(f"        static constexpr std::size_t offset = {offset};")
             lines.append("    };")
             lines.append("")
 

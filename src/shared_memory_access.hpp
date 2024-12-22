@@ -72,3 +72,19 @@ NDPtr<T, Dims...> mapSharedMemoryVariadic()
         static_cast<char*>(addr) + offset
     );
 }
+
+//------------------------------------------------------------------------------
+// The `Get` template function that uses a tag from `SharedMemoryLayout` to map shared memory.
+//
+// Example usage:
+//    auto myfield = Get<SharedMemoryLayout::myfield_tag>();
+//------------------------------------------------------------------------------
+template <typename Tag>
+auto getSharedMemoryFieldPtr()
+{
+    using FieldType = typename SharedMemoryLayout::field_info<Tag>::type;
+    constexpr std::size_t offset = SharedMemoryLayout::field_info<Tag>::offset;
+
+    // Handle array types via NDArray. Automatically deduces dimensions if present.
+    return mapSharedMemoryVariadic<FieldType, offset>();
+}
