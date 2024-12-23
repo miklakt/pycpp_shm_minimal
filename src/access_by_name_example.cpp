@@ -25,7 +25,7 @@ int main()
         int k = 0;
         //No bounds check, unsafe!
         for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 10; j++) {
+            for (int j = 0; j < 12; j++) {
                 std::cout << i << "\t" << j << "\n";
                 (*arr2d)[i][j] = k;
                 k++;

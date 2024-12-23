@@ -4,10 +4,13 @@
 
 int main() {
     try {
-        // Apply a function to increment elements within specific boundaries
-        ApplyFunctionElementwise<SharedMemoryLayout::myarr_tag>(
-            [](auto& x) { x += 1.0f; }//, // Function to apply
-            //1, 3, 2, 5                 // Boundaries: [1, 3) for dim 0, [2, 5) for dim 1
+        // Apply a function to increment elements of myarr and store to myarr2
+        ApplyFunctionElementwise<SharedMemoryLayout::myarr_tag, SharedMemoryLayout::myarr2_tag>(
+            [](const auto& x) { return  x+1.0f; }//, // Function to apply
+        );
+        // Apply a function to increment elements of myarr2 and store to myarr
+        ApplyFunctionElementwise<SharedMemoryLayout::myarr2_tag, SharedMemoryLayout::myarr_tag>(
+            [](const auto& x) { return  x+1.0f; }//, // Function to apply
         );
 
     } catch (const std::exception& e) {

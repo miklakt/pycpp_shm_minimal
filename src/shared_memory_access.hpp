@@ -43,7 +43,7 @@ using NDPtr = typename NDArray<T, Dims...>::type*;
 //    - Returns NDPtr<T, Dims...> (pointer to T[D1][D2]...[Dn])
 //
 template <typename T, std::size_t offset, std::size_t... Dims>
-NDPtr<T, Dims...> mapSharedMemoryVariadic()
+NDPtr<T, Dims...> mapSharedMemory()
 {
     // 1) Open existing shared memory (created by Python or another process).
     int fd = shm_open(SHM_NAME, O_RDWR, 0666);
@@ -52,7 +52,6 @@ NDPtr<T, Dims...> mapSharedMemoryVariadic()
     }
 
     // 2) Determine the total size so we can map the entire region.
-    //    In a real app, you might know the size from JSON or pass it in.
     off_t size = lseek(fd, 0, SEEK_END);
     if (size < 0) {
         close(fd);
@@ -86,5 +85,5 @@ auto getSharedMemoryFieldPtr()
     constexpr std::size_t offset = SharedMemoryLayout::field_info<Tag>::offset;
 
     // Handle array types via NDArray. Automatically deduces dimensions if present.
-    return mapSharedMemoryVariadic<FieldType, offset>();
+    return mapSharedMemory<FieldType, offset>();
 }

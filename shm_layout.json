@@ -15,6 +15,11 @@
         "name": "myarr",
         "type": "float32",
         "shape": [8, 12]
+      },
+      {
+        "name": "myarr2",
+        "type": "float32",
+        "shape": [8, 12]
       }
     ]
 }

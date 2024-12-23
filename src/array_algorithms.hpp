@@ -1,7 +1,6 @@
 #include <tuple>
 #include <type_traits>
-#include <cstddef>
-#include <iostream>
+#include <functional>
 #include <utility> // for std::forward
 
 #include "shared_memory_layout.hxx"
@@ -10,35 +9,40 @@
 //------------------------------------------------------------------------------
 // Recursive helper to iterate through multi-dimensional arrays and apply a function
 //------------------------------------------------------------------------------
-template <typename T, typename Func, std::size_t N>
-void ApplyFunctionElementwiseImpl(T (&array)[N], Func&& func) {
+template <typename TIn, typename TOut, typename Func, std::size_t N>
+void ApplyFunctionElementwiseImpl(const TIn (&inputArray)[N], TOut (&outputArray)[N], Func&& func) {
     for (std::size_t i = 0; i < N; ++i) {
-        if constexpr (std::is_array_v<T>) {
-            // Recursive case: apply function to sub-array
-            ApplyFunctionElementwiseImpl(array[i], std::forward<Func>(func));
+        if constexpr (std::is_array_v<TIn> && std::is_array_v<TOut>) {
+            // Recursive case: apply function to sub-arrays
+            ApplyFunctionElementwiseImpl(inputArray[i], outputArray[i], std::forward<Func>(func));
         } else {
-            // Base case: apply function to scalar element
-            func(array[i]);
+            // Base case: apply function to scalar elements
+            outputArray[i] = func(inputArray[i]); // Assign function result to output
         }
     }
 }
 
 //------------------------------------------------------------------------------
-// ApplyFunction: Apply an element-wise function to an array given its tag
+// ApplyFunction: Apply an element-wise function to input and output arrays given their tags
 //------------------------------------------------------------------------------
-template <typename Tag, typename Func>
+template <typename InputTag, typename OutputTag, typename Func>
 void ApplyFunctionElementwise(Func&& func) {
-    // 1. Get the array type and pointer using the tag
-    using ArrayType = typename SharedMemoryLayout::field_info<Tag>::type;
+    // 1. Get the array types and pointers using the tags
+    using InputArrayType = typename SharedMemoryLayout::field_info<InputTag>::type;
+    using OutputArrayType = typename SharedMemoryLayout::field_info<OutputTag>::type;
 
-    // Ensure it is an array type
-    static_assert(std::is_array_v<ArrayType>, "Tag must correspond to an array type.");
+    // Ensure both are array types
+    static_assert(std::is_array_v<InputArrayType>, "InputTag must correspond to an array type.");
+    static_assert(std::is_array_v<OutputArrayType>, "OutputTag must correspond to an array type.");
 
-    // 2. Map the shared memory field using the tag
-    auto arrayPtr = getSharedMemoryFieldPtr<Tag>();
+    // 2. Map the shared memory fields using the tags
+    const auto inputArrayPtr = getSharedMemoryFieldPtr<InputTag>();
+    auto outputArrayPtr = getSharedMemoryFieldPtr<OutputTag>();
 
-    // 3. Apply the function to the array
-    ApplyFunctionElementwiseImpl(*arrayPtr, std::forward<Func>(func));
+    // 3. Apply the function to the input and output arrays
+    ApplyFunctionElementwiseImpl(*inputArrayPtr, *outputArrayPtr, std::forward<Func>(func));
 }
 
-
+struct ApplyElementwise_{
+    template<typename InputTag>
+};
