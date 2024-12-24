@@ -186,7 +186,7 @@ class SharedMemoryAllocator:
         lines.append("")
         spec = json.loads(Path(self.spec_file).read_text())
         lines.append(f'inline constexpr const char* SHM_NAME = "{spec["shm_name"]}";')
-        lines.append(f'inline constexpr std::size_t SHM_SIZE = {self.total_size};\n' + "// Bytes")
+        lines.append(f'inline constexpr std::size_t SHM_SIZE = {self.total_size};' + "// Bytes")
         lines.append("")
         lines.append("namespace SharedMemoryLayout {")
         lines.append("")
@@ -245,4 +245,6 @@ print("myarr2 =\n", allocator.fields["myarr2"])
 # allocator_new.close()
 # %%
 allocator.generate_cpp_header("src/shared_memory_layout.hxx")
+# %%
+allocator.close()
 # %%
