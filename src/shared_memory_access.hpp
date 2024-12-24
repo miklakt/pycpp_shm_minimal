@@ -1,89 +1,99 @@
 #pragma once
 
-#include <cstddef>    // size_t
+#include <cstddef>
 #include <string>
 #include <stdexcept>
-#include <sys/mman.h> // mmap, munmap
-#include <fcntl.h>    // shm_open, O_* constants
-#include <unistd.h>   // close, lseek
-#include <cstring>    // strerror
-
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cstring>
 #include "shared_memory_layout.hxx"
 
-//------------------------------------------------------------------------------
-// Meta-function that builds T[D1][D2]...[Dn] out of T and variadic Dims.
-//
-// Example: NDArray<float, 2,3>::type is float[2][3].
-//          NDArray<int, 4,5,6>::type is int[4][5][6].
-//
-template <typename T, std::size_t... Dims>
-struct NDArray {
-    using type = T;  // no dimensions => scalar T
-};
 
-template <typename T, std::size_t First, std::size_t... Rest>
-struct NDArray<T, First, Rest...> {
-    // Recursively build sub-array
-    using sub = typename NDArray<T, Rest...>::type;
-    // Prepend dimension [First]
-    using type = sub[First];
-};
 
-//
-// Helper alias: NDPtr<T, D1, D2, ...> => "pointer to T[D1][D2]..."
-//
-template <typename T, std::size_t... Dims>
-using NDPtr = typename NDArray<T, Dims...>::type*;
+namespace SharedMemoryAccess {
 
-//------------------------------------------------------------------------------
-//
-// The variadic template function that:
-//    - Opens the named shared memory
-//    - mmaps the entire segment
-//    - Returns NDPtr<T, Dims...> (pointer to T[D1][D2]...[Dn])
-//
-template <typename T, std::size_t offset, std::size_t... Dims>
-NDPtr<T, Dims...> mapSharedMemory()
-{
-    // 1) Open existing shared memory (created by Python or another process).
-    int fd = shm_open(SHM_NAME, O_RDWR, 0666);
-    if (fd < 0) {
-        throw std::runtime_error("Failed to open shared memory '" + std::string(SHM_NAME) + "': " + std::strerror(errno));
-    }
+    // Pointer to the mapped shared memory region
+    static void* addr_ = nullptr;
+    // Total size of the shared memory
+    static std::size_t total_size_ = 0;
 
-    // 2) Determine the total size so we can map the entire region.
-    off_t size = lseek(fd, 0, SEEK_END);
-    if (size < 0) {
+    // Function to initialize the shared memory mapping
+    inline void initialize() {
+        // 1) Open the existing shared memory segment using constexpr SHM_NAME
+        int fd = shm_open(SHM_NAME, O_RDWR, 0666);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open shared memory '" + std::string(SHM_NAME) + "': " + std::strerror(errno));
+        }
+
+        // 2) Map the shared memory into the process's address space
+        addr_ = mmap(nullptr, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         close(fd);
-        throw std::runtime_error("lseek() failed: " + std::string(std::strerror(errno)));
+        if (addr_ == MAP_FAILED) {
+            throw std::runtime_error("mmap() failed: " + std::string(std::strerror(errno)));
+        }
     }
 
-    // 3) Map into our address space.
-    void* addr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    close(fd);
-    if (addr == MAP_FAILED) {
-        throw std::runtime_error("mmap() failed: " + std::string(std::strerror(errno)));
+    // Template to get a reference to a shared memory field based on a tag
+    template <typename Tag>
+    inline auto& get() {
+        // Check if shared memory is already initialized (addr_ is not nullptr)
+        if (addr_ == nullptr) {
+            initialize();  // Initialize shared memory if not already initialized
+        }
+        using FieldType = typename SharedMemoryLayout::field_info<Tag>::type;
+        constexpr std::size_t offset = SharedMemoryLayout::field_info<Tag>::offset;
+
+        // Compute the pointer to the field based on the offset
+        auto* ptr = reinterpret_cast<FieldType*>(static_cast<char*>(addr_) + offset);
+        
+        return *reinterpret_cast<FieldType* const>(ptr);
+
     }
 
-    // 4) Return a pointer to the typed region at 'offset'.
-    //    The type is T[D1][D2]...[Dn] if we have dims, or just T if none.
-    return reinterpret_cast<NDPtr<T, Dims...>>(
-        static_cast<char*>(addr) + offset
-    );
-}
+} // namespace SharedMemoryAccess
 
-//------------------------------------------------------------------------------
-// The `getSharedMemoryFieldPtr` template function that uses a tag from `SharedMemoryLayout` to map shared memory.
-//
-// Example usage:
-//    auto myfield = getSharedMemoryFieldPtr<SharedMemoryLayout::myfield_tag>();
-//------------------------------------------------------------------------------
-template <typename Tag>
-auto getSharedMemoryFieldPtr()
-{
-    using FieldType = typename SharedMemoryLayout::field_info<Tag>::type;
-    constexpr std::size_t offset = SharedMemoryLayout::field_info<Tag>::offset;
+/**
+ * @brief Maps a shared memory field to a reference variable.
+ * 
+ * This macro retrieves a reference to a field in shared memory, identified by the
+ * specified tag, and assigns it to the provided destination variable.
+ * The field in shared memory is accessed via the `SharedMemoryAccess::get` function,
+ * and the macro automatically appends `_tag` to the tag name.
+ * 
+ * The destination variable (`dest`) must be a reference type, and it will be assigned
+ * a reference to the shared memory field. This macro simplifies the process of accessing
+ * shared memory fields without needing to manually type out the tag suffix.
+ * 
+ * @param source The tag that identifies the shared memory field in `SharedMemoryLayout`.
+ * @param dest The destination reference variable to which the shared memory field is assigned.
+ * 
+ * Example usage:
+ * @code
+ * MAP_SHM_TO(myint, myint);  // Maps the shared memory field myint to the variable myint.
+ * MAP_SHM_TO(myarr, myarr);  // Maps the shared memory array myarr to the variable myarr.
+ * @endcode
+ */
+#define MAP_SHM(source, dest) \
+    auto& dest = SharedMemoryAccess::get<SharedMemoryLayout::source##_tag>()
 
-    // Handle array types via NDArray. Automatically deduces dimensions if present.
-    return mapSharedMemory<FieldType, offset>();
-}
+/**
+ * @brief Macro to copy the content of a shared memory array to a local variable.
+ *
+ * This macro deduces the type of the shared memory array, creates a local variable
+ * of the same type and size, and copies the content from the shared memory array
+ * to the local variable using std::memcpy.
+ *
+ * @param src The source array (shared memory array).
+ * @param dest The destination variable name.
+ */
+#define CREATE_COPY(src, dest)                                  \
+    using ArrType_##dest = std::remove_reference<decltype(src)>::type; \
+    ArrType_##dest dest = {};                                  \
+    std::memcpy(dest, src, sizeof(src))
+
+#define COPY(src, dest)                                                     \
+    static_assert(std::is_same_v<std::remove_reference_t<decltype(src)>,    \
+                                 std::remove_reference_t<decltype(dest)>>,  \
+                  "COPY error: src and dest must have the same type!");     \
+    std::memcpy(dest, src, sizeof(src))
