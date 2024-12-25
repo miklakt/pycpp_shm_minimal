@@ -1,0 +1,21 @@
+{
+    "shm_name": "my_shm_name",
+    "variables": [
+      {
+        "name": "dt",
+        "type": "float32"
+      },
+      {
+        "name": "timestep",
+        "type": "float32"
+      }
+    ],
+    "arrays": [
+      {
+        "name": "c",
+        "type": "float32",
+        "shape": [1000, 1000]
+      }
+    ]
+}
+  

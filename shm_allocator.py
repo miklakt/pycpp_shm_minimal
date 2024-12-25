@@ -180,8 +180,8 @@ class SharedMemoryAllocator:
         found in `self.layout_info`, along with the total size of the shared memory.
         """
         lines = []
-        lines.append("#pragma once")
         lines.append("// This file is AUTO-GENERATED from the SharedMemoryAllocator class. Do not edit manually.")
+        lines.append("#pragma once")
         lines.append("#include <cstddef>")
         lines.append("")
         spec = json.loads(Path(self.spec_file).read_text())
@@ -235,16 +235,17 @@ class SharedMemoryAllocator:
 
 
 #%%
-allocator = SharedMemoryAllocator("shm_layout.json", create_new=True)
-#%%
-print("Fields in new shared memory:", list(allocator.fields.keys()))
-print("myint =", allocator.fields["myint"])
-print("myarr =\n", allocator.fields["myarr"])
-print("myarr2 =\n", allocator.fields["myarr2"])
-# Do not close/unlink yet if we want another process to attach...
-# allocator_new.close()
-# %%
-allocator.generate_cpp_header("src/shared_memory_layout.hxx")
-# %%
-allocator.close()
-# %%
+if __name__ == "__main__":
+    allocator = SharedMemoryAllocator("shm_layout_example.json", create_new=True)
+    #%%
+    print("Fields in new shared memory:", list(allocator.fields.keys()))
+    print("myint =", allocator.fields["myint"])
+    print("myarr =\n", allocator.fields["myarr"])
+    print("myarr2 =\n", allocator.fields["myarr2"])
+    # Do not close/unlink yet if we want another process to attach...
+    # allocator_new.close()
+    # %%
+    allocator.generate_cpp_header("src/shared_memory_layout.hxx")
+    # %%
+    allocator.close()
+    # %%

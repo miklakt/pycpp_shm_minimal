@@ -1,6 +1,6 @@
 #pragma once
 
-#define EIGEN_STACK_ALLOCATION_LIMIT 10000000 // Increase to 10 MB
+#define EIGEN_STACK_ALLOCATION_LIMIT 10000000 // Increase to 10 MB, otherwise it refuses to put it in stack memory
 #include <Eigen/Dense>
 #include <type_traits>
 #include <cstddef>
@@ -29,5 +29,11 @@ auto WrapToEigen(ArrayType& arr) {
         throw std::runtime_error("Unexpected array dimensions. Only 1D or 2D arrays are supported.");
         return 1;
     }
+}
+
+auto CopyEigen(auto& shm_matrix) {
+    // Create a deep copy using decltype
+    typename std::remove_reference<decltype(shm_matrix)>::type::PlainObject deep_copy = shm_matrix;
+    return deep_copy;
 }
 } // namespace SharedMemoryAccess
