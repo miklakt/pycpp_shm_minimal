@@ -89,3 +89,4 @@ if __name__ == "__main__":
     app = SharedMemoryPlotApp(subprocess_cmd=[executable, "10000"])
     app.mainloop()
     exit()
+#%%
