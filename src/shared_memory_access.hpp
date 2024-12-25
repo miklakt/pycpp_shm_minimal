@@ -45,9 +45,9 @@ namespace SharedMemoryAccess {
         constexpr std::size_t offset = SharedMemoryLayout::field_info<Tag>::offset;
 
         // Compute the pointer to the field based on the offset
-        auto* ptr = reinterpret_cast<FieldType*>(static_cast<char*>(addr_) + offset);
+        auto* ptr = reinterpret_cast<FieldType*>(static_cast<char* >(addr_) + offset);
         
-        return *reinterpret_cast<FieldType* const>(ptr);
+        return *reinterpret_cast<FieldType* >(ptr);
 
     }
 
@@ -76,6 +76,9 @@ namespace SharedMemoryAccess {
  */
 #define MAP_SHM(source, dest) \
     auto& dest = SharedMemoryAccess::get<SharedMemoryLayout::source##_tag>()
+
+// #define MAP_SHM_EIGEN(source, dest) \
+//     auto dest = SharedMemoryAccess::WrapToEigen(&SharedMemoryAccess::get<SharedMemoryLayout::source##_tag>());
 
 /**
  * @brief Macro to copy the content of a shared memory array to a local variable.

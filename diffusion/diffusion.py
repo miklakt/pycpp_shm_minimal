@@ -45,7 +45,7 @@ class SharedMemoryPlotApp(tk.Tk):
         super().__init__()
 
         self.title("Simple Diffusion Real-Time Visualization")
-        self.geometry("800x800")
+        self.geometry("1000x1000")
 
         # Create Matplotlib figure and axis
         self.figure = Figure(figsize=(5, 4), dpi=100)
