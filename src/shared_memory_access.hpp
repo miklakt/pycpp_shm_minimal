@@ -15,8 +15,6 @@ namespace SharedMemoryAccess {
 
     // Pointer to the mapped shared memory region
     static void* addr_ = nullptr;
-    // Total size of the shared memory
-    static std::size_t total_size_ = 0;
 
     // Function to initialize the shared memory mapping
     inline void initialize() {
@@ -34,8 +32,13 @@ namespace SharedMemoryAccess {
         }
     }
 
+    // Concept to check if a type is a valid SharedMemoryLayout::field_info specialization
+    template <typename Tag>
+    concept ValidTag = requires {typename SharedMemoryLayout::field_info<Tag>::type;};
+
     // Template to get a reference to a shared memory field based on a tag
     template <typename Tag>
+    requires ValidTag<Tag> // Ensure Tag is valid and found in Shared Memory Layout
     inline auto& get() {
         // Check if shared memory is already initialized (addr_ is not nullptr)
         if (addr_ == nullptr) {
@@ -47,56 +50,53 @@ namespace SharedMemoryAccess {
         // Compute the pointer to the field based on the offset
         auto* ptr = reinterpret_cast<FieldType*>(static_cast<char* >(addr_) + offset);
         
-        return *reinterpret_cast<FieldType* >(ptr);
-
+        return *ptr;
     }
 
+    template<typename FieldType>
+    constexpr std::size_t get_size(){
+        return sizeof(FieldType) / sizeof(typename std::remove_all_extents<FieldType>::type);
+    }
+
+    template<typename FieldType>
+    constexpr std::size_t get_size(FieldType arr){
+        return sizeof(FieldType) / sizeof(typename std::remove_all_extents<FieldType>::type);
+    }
+
+    template <typename Tag>
+    requires ValidTag<Tag>
+    inline auto& get_flat() {
+        // Check if shared memory is already initialized (addr_ is not nullptr)
+        if (addr_ == nullptr) {
+            initialize();  // Initialize shared memory if not already initialized
+        }
+
+        using FieldType = typename SharedMemoryLayout::field_info<Tag>::type;
+        constexpr std::size_t offset = SharedMemoryLayout::field_info<Tag>::offset;
+        
+        constexpr std::size_t size = get_size<FieldType>();
+        
+
+        // Compute the pointer to the field based on the offset
+        auto* ptr = reinterpret_cast<FieldType*>(static_cast<char*>(addr_) + offset);
+
+        // Return a flattened array pointer
+        return *reinterpret_cast<typename std::remove_all_extents<FieldType>::type(*)[size]>(ptr);
+    }
+
+    template<typename T>
+    constexpr auto& flatten(T& array) {
+    static_assert(std::is_array_v<T>, "Input must be a fixed-length multidimensional array.");
+    constexpr std::size_t size = get_size<T>();
+    
+    // Reinterpret the reference to a flattened array
+    return *reinterpret_cast<typename std::remove_all_extents<T>::type(*)[size]>(&array);
+    }
+    namespace Fields{
+        MAP_ALL_SHARED_MEMORY_FIELDS
+
+    }
 } // namespace SharedMemoryAccess
 
-/**
- * @brief Maps a shared memory field to a reference variable.
- * 
- * This macro retrieves a reference to a field in shared memory, identified by the
- * specified tag, and assigns it to the provided destination variable.
- * The field in shared memory is accessed via the `SharedMemoryAccess::get` function,
- * and the macro automatically appends `_tag` to the tag name.
- * 
- * The destination variable (`dest`) must be a reference type, and it will be assigned
- * a reference to the shared memory field. This macro simplifies the process of accessing
- * shared memory fields without needing to manually type out the tag suffix.
- * 
- * @param source The tag that identifies the shared memory field in `SharedMemoryLayout`.
- * @param dest The destination reference variable to which the shared memory field is assigned.
- * 
- * Example usage:
- * @code
- * MAP_SHM_TO(myint, myint);  // Maps the shared memory field myint to the variable myint.
- * MAP_SHM_TO(myarr, myarr);  // Maps the shared memory array myarr to the variable myarr.
- * @endcode
- */
-#define MAP_SHM(source, dest) \
-    auto& dest = SharedMemoryAccess::get<SharedMemoryLayout::source##_tag>()
 
-// #define MAP_SHM_EIGEN(source, dest) \
-//     auto dest = SharedMemoryAccess::WrapToEigen(&SharedMemoryAccess::get<SharedMemoryLayout::source##_tag>());
-
-/**
- * @brief Macro to copy the content of a shared memory array to a local variable.
- *
- * This macro deduces the type of the shared memory array, creates a local variable
- * of the same type and size, and copies the content from the shared memory array
- * to the local variable using std::memcpy.
- *
- * @param src The source array (shared memory array).
- * @param dest The destination variable name.
- */
-#define CREATE_COPY(src, dest)                                  \
-    using ArrType_##dest = std::remove_reference<decltype(src)>::type; \
-    ArrType_##dest dest = {};                                  \
-    std::memcpy(dest, src, sizeof(src))
-
-#define COPY(src, dest)                                                     \
-    static_assert(std::is_same_v<std::remove_reference_t<decltype(src)>,    \
-                                 std::remove_reference_t<decltype(dest)>>,  \
-                  "COPY error: src and dest must have the same type!");     \
-    std::memcpy(dest, src, sizeof(src))
+    

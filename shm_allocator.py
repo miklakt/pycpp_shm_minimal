@@ -219,13 +219,26 @@ class SharedMemoryAllocator:
                 type_str = cpp_type + ''.join([f'[{x}]' for x in shape])
 
             lines.append(f"    template <>")
-            lines.append(f"    struct field_info<{tag_name}> {{")
+            lines.append(f"    struct field_info<{name}_tag> {{")
             lines.append(f"        using type = {type_str};")
             lines.append(f"        static constexpr std::size_t offset = {offset};")
             lines.append("    };")
             lines.append("")
 
         lines.append("} // namespace SharedMemoryLayout")
+        lines.append("")
+        lines.append("")
+
+        lines.append("#define MAP_ALL_SHARED_MEMORY_FIELDS \\")
+        #lines.append("      SharedMemoryAccess::Field{ \\")
+        for item in self.layout_info:
+            name = item["name"]
+            offset = item["offset"]
+            shape = item["shape"]
+            dtype = item["dtype"]
+
+            lines.append(f"     auto& {name} = get<SharedMemoryLayout::{name}_tag>();  \\")
+        lines.append("")
         lines.append("")
 
         # Write to file
