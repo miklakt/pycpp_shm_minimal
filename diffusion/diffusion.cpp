@@ -1,48 +1,56 @@
+//g++ -std=c++20 -O3 diffusion/diffusion.cpp -o diffusion/bin/diffusion
 #include <iostream>
 #include <cstdlib> // For std::atoi
 #include <chrono> // For benchmarking
 #include "../src/shared_memory_access.hpp"
-#include "../src/eigen_map.hpp"
 
-//Function to perform diffusion
-void performDiffusion(auto& matrix, const float dt, const int iterations) {
-    auto temp = SharedMemoryAccess::CopyEigen(matrix);
-    
-    for (int iter = 0; iter < iterations; ++iter){
-        // Diffusion kernel: simple average of neighbors
-        for (int i = 1; i < matrix.rows() - 1; ++i) {
-            for (int j = 1; j < matrix.cols() - 1; ++j) {
-                temp(i, j) = matrix(i, j) + dt * (
-                    matrix(i - 1, j) + matrix(i + 1, j) +
-                    matrix(i, j - 1) + matrix(i, j + 1) - 4 * matrix(i, j)
-                );
-            }
-        }
-        matrix = temp;
+
+// Apply boundary conditions
+template <typename ArrayType>
+void apply_boundary_conditions(ArrayType& c, float source_value = 1.0f, float sink_value = 0.0f) {
+    // Left boundary (source)
+    using T = typename std::remove_all_extents<ArrayType>::type; // Deduce scalar type (e.g., float)
+    constexpr std::size_t Rows = std::extent<ArrayType, 0>::value; // Deduce rows
+    constexpr std::size_t Cols = std::extent<ArrayType, 1>::value; // Deduce columns
+    // Source left, sink right
+
+    for (size_t j = 0; j < Cols; ++j) {
+        c[0][j] = static_cast<T>(source_value);
+        c[Rows-1][j] = static_cast<T>(sink_value);
+    }
+
+    // Top boundary (mirror condition)
+    for (size_t i = 0; i < Rows; ++i) {
+        c[i][0] = c[i][1];
+        c[i][Cols-1] = c[i][Cols-2];
     }
 }
 
-// Vectorized diffusion using Eigen block operations
-// void performDiffusion(auto& matrix, float dt) {
-//     auto temp = SharedMemoryAccess::CopyEigen(matrix);
+//Function to perform diffusion
+template <typename ArrayType>
+void performDiffusion(ArrayType& matrix, const float dt, const int iterations) {
+    ArrayType temp{0};
 
-//     // Define the block size (excluding the boundary)
-//     const int rows = matrix.rows() - 2;
-//     const int cols = matrix.cols() - 2;
+    constexpr std::size_t Rows = std::extent<ArrayType, 0>::value;
+    constexpr std::size_t Cols = std::extent<ArrayType, 1>::value;
+    
+    for (int iter = 0; iter < iterations; ++iter){
+        #pragma omp parallel for num_threads(12)
+        for (int i = 1; i < Rows - 1; ++i) {
+            for (int j = 1; j < Cols - 1; ++j) {
+                temp[i][j] = matrix[i][j] + dt * (
+                    matrix[i-1][j] + matrix[i+1][j] +
+                    matrix[i][j - 1] + matrix[i][j + 1] 
+                    - 4 * matrix[i][j]
+                );
+            }
+        }
 
-//     // Apply the diffusion kernel using matrix shifts and block operations
-//     temp.block(1, 1, rows, cols) =
-//         matrix.block(1, 1, rows, cols) + dt * (
-//             matrix.block(0, 1, rows, cols) +  // Top neighbor
-//             matrix.block(2, 1, rows, cols) +  // Bottom neighbor
-//             matrix.block(1, 0, rows, cols) +  // Left neighbor
-//             matrix.block(1, 2, rows, cols) -  // Right neighbor
-//             4 * matrix.block(1, 1, rows, cols) // Center
-//         );
+        std::memcpy(matrix, temp, sizeof(matrix));
+        apply_boundary_conditions(matrix);
+    }
 
-//     // Assign the result back to the original matrix
-//     matrix = temp;
-// }
+}
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -57,20 +65,16 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        // Map shared memory variables
-        MAP_SHM(c, c_raw);
-        MAP_SHM(dt, dt);
-
-        // Wrap shared memory array to Eigen matrix
-        auto c = SharedMemoryAccess::WrapToEigen(c_raw);
+        
+        using SharedMemoryAccess::Fields::c;
+        using SharedMemoryAccess::Fields::dt;
+        using SharedMemoryAccess::Fields::timestep;
 
         // Benchmark the diffusion process
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        // for (int iter = 0; iter < iterations; ++iter) {
-        //     performDiffusion(c, dt);
-        // }
         performDiffusion(c, dt, iterations);
+        timestep = timestep + dt*iterations;
 
         auto end_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_seconds = end_time - start_time;
