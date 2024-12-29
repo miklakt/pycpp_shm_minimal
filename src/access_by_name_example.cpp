@@ -1,14 +1,10 @@
 //g++ -std=c++20 -O3 src/access_by_name_example.cpp -o bin/assess_by_name_example
 #include <iostream>
-#include <cstdint>
 #include <algorithm> //for std::transform
 #include <iterator> // for std::begin, std::end
 
 #include "shared_memory_access.hpp"
 
-// Include the header or code from above
-
-// Example usage
 int main() {
     try {
         using SharedMemoryAccess::Fields::myint;
@@ -18,6 +14,7 @@ int main() {
 
         std::cout << "Type of myint: " << typeid(myint).name() << std::endl;
         std::cout << "Type of myarr: " << typeid(myarr).name() << std::endl;
+        std::cout << "Size of myarr: " << SharedMemoryAccess::get_size(myarr) << std::endl;
 
         std::cout << "Value of myint: " << myint << std::endl;
         std::cout << "Value of myarr[0][0]: " << myarr[0][0] << std::endl;
@@ -29,8 +26,16 @@ int main() {
         std::cout << "Updated myarr[0][0]: " << myarr[0][0] << std::endl;
         std::cout << "Updated myarr_flat[0]: " << myarr_flat[0] << std::endl;
 
-        std::transform(std::begin(myarr_flat), std::end(myarr_flat), std::begin(myarr_flat), [](float x){return x +1.0f;});
-        //std::transform(std::begin(myarr_flat2), std::end(myarr_flat2), std::begin(myarr_flat2), [](float x){std::cout<<x<<" "; return x;});
+        // Apply some elementwise function to flatten memory view
+        std::transform(
+            std::begin(myarr_flat), std::end(myarr_flat), std::begin(myarr_flat), 
+            [](float x){static int i = 0; i++; return i;}
+            );
+
+        // A reshaped view to an array, pointing to the same chunk of memory
+        auto& myarr_reshaped = SharedMemoryAccess::reshape<25,2,2>(myarr);
+        myarr_reshaped[1][1][1] = -1;
+        std::cout << "Updated myarr_reshaped[1][1][1]: " << myarr_reshaped[1][1][1] << std::endl;
 
     } catch (const std::runtime_error& e) {
         std::cerr << "Error: " << e.what() << std::endl;
