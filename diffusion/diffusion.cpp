@@ -2,21 +2,30 @@
 #include <iostream>
 #include <cstdlib> // For std::atoi
 #include <chrono> // For benchmarking
+#include <algorithm>
 #include "../src/shared_memory_access.hpp"
 
 
-// Apply boundary conditions
-template <typename ArrayType>
-void apply_boundary_conditions(ArrayType& c, float source_value = 1.0f, float sink_value = 0.0f) {
-    // Left boundary (source)
-    using T = typename std::remove_all_extents<ArrayType>::type; // Deduce scalar type (e.g., float)
-    constexpr std::size_t Rows = std::extent<ArrayType, 0>::value; // Deduce rows
-    constexpr std::size_t Cols = std::extent<ArrayType, 1>::value; // Deduce columns
-    // Source left, sink right
+using SharedMemoryAccess::Fields::c; //concentration
+using SharedMemoryAccess::Fields::dt; //time step
+using SharedMemoryAccess::Fields::timestep; //simulation time
 
+using ArrayType = std::remove_reference_t<decltype(c)>; //type of array, like float[800][600]
+constexpr std::size_t Rows = std::extent<ArrayType, 0>::value;
+constexpr std::size_t Cols = std::extent<ArrayType, 1>::value;
+
+ArrayType temp{0}; //local temporary array
+
+
+
+// Apply boundary conditions
+inline void apply_boundary_conditions(){
+    constexpr float source_value = 1.0f; 
+    constexpr float sink_value = 0.0f;
+    // Source left, sink right
     for (size_t j = 0; j < Cols; ++j) {
-        c[0][j] = static_cast<T>(source_value);
-        c[Rows-1][j] = static_cast<T>(sink_value);
+        c[0][j] = source_value;
+        c[Rows-1][j] = sink_value;
     }
 
     // Top boundary (mirror condition)
@@ -26,30 +35,18 @@ void apply_boundary_conditions(ArrayType& c, float source_value = 1.0f, float si
     }
 }
 
-//Function to perform diffusion
-template <typename ArrayType>
-void performDiffusion(ArrayType& matrix, const float dt, const int iterations) {
-    ArrayType temp{0};
-
-    constexpr std::size_t Rows = std::extent<ArrayType, 0>::value;
-    constexpr std::size_t Cols = std::extent<ArrayType, 1>::value;
-    
-    for (int iter = 0; iter < iterations; ++iter){
-        #pragma omp parallel for num_threads(12)
-        for (int i = 1; i < Rows - 1; ++i) {
-            for (int j = 1; j < Cols - 1; ++j) {
-                temp[i][j] = matrix[i][j] + dt * (
-                    matrix[i-1][j] + matrix[i+1][j] +
-                    matrix[i][j - 1] + matrix[i][j + 1] 
-                    - 4 * matrix[i][j]
-                );
-            }
+inline void perform_diffusion(const int iterations){
+    #pragma omp parallel for num_threads(4)
+    for (int i = 1; i < Rows - 1; ++i) {
+        for (int j = 1; j < Cols - 1; ++j) {
+            temp[i][j] = c[i][j] + dt * (
+                c[i-1][j] + c[i+1][j] +
+                c[i][j - 1] + c[i][j + 1] 
+                - 4 * c[i][j]
+            );
         }
-
-        std::memcpy(matrix, temp, sizeof(matrix));
-        apply_boundary_conditions(matrix);
     }
-
+    std::memcpy(c, temp, sizeof(c));
 }
 
 int main(int argc, char* argv[]) {
@@ -66,15 +63,14 @@ int main(int argc, char* argv[]) {
 
     try {
         
-        using SharedMemoryAccess::Fields::c;
-        using SharedMemoryAccess::Fields::dt;
-        using SharedMemoryAccess::Fields::timestep;
-
-        // Benchmark the diffusion process
+        // Benchmark the code
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        performDiffusion(c, dt, iterations);
-        timestep = timestep + dt*iterations;
+        for (int iter = 0; iter < iterations; ++iter){
+            perform_diffusion(iterations);
+            apply_boundary_conditions();
+            timestep = timestep + dt;
+        }
 
         auto end_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_seconds = end_time - start_time;
