@@ -35,7 +35,7 @@ inline void apply_boundary_conditions(){
     }
 }
 
-inline void perform_diffusion(const int iterations){
+inline void perform_diffusion(){
     #pragma omp parallel for num_threads(4)
     for (int i = 1; i < Rows - 1; ++i) {
         for (int j = 1; j < Cols - 1; ++j) {
@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
         auto start_time = std::chrono::high_resolution_clock::now();
 
         for (int iter = 0; iter < iterations; ++iter){
-            perform_diffusion(iterations);
+            perform_diffusion();
             apply_boundary_conditions();
             timestep = timestep + dt;
         }

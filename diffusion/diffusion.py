@@ -49,9 +49,8 @@ except subprocess.CalledProcessError as e:
     print("Compilation failed:", e)
     exit(1)
 # %%
-# Simulated shared memory access function
 def access_shared_memory():
-    return allocator.fields["c"].T  # Replace with your shared memory array access
+    return allocator.fields["c"].T
 
 # %%
 class SharedMemoryPlotApp(tk.Tk):
