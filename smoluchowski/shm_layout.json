@@ -1,65 +1,70 @@
 {
   "shm_name": "drift_diffusion_shm",
   "variables": [
-      {
-          "name": "dt",
-          "type": "float32"
-      },
-      {
-        "name": "timestep",
+    {
+        "name": "dt",
         "type": "float32"
-      }
+    },
+    {
+    "name": "timestep",
+    "type": "float32"
+    }
   ],
   "arrays": [
-      {
-          "name": "c",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "D_x",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "D_y",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "dU_x",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "dU_y",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "alpha_x",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "alpha_y",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "lambda_n",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "lambda_s",
-          "type": "float32",
-          "shape": [800,400]
-      },
-      {
-          "name": "c_next",
-          "type": "float32",
-          "shape": [800,400]
-      }
+    {
+        "name": "c",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "D_x",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "D_y",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "dU_x",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "dU_y",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "alpha_x",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "alpha_y",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "lambda_n",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "lambda_s",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+        "name": "c_next",
+        "type": "float32",
+        "shape": [400,200]
+    },
+    {
+    "name": "div_J",
+    "type": "float32",
+    "shape": [400,200]
+    }
   ]
 }
