@@ -97,14 +97,22 @@ def initialize_shared_memory(allocator_, W_arr=None, U_arr=None, D_arr=None):
 cpp_file = str(Path(__file__).parent / "smoluchowski.cpp")
 executable = str(Path(__file__).parent / "bin" / "smoluchowski")
 #==============
-USE_CUDA = False
+USE_CUDA = True
 #==============
-compile_command = [
-    "g++", "-O3",
-    "-std=c++20", "-fopenmp",
-    "-march=native",
-    "-funsafe-math-optimizations",
-    cpp_file, "-o", executable,
+if USE_CUDA:
+    cpp_file = str(Path(__file__).parent / "smoluchowski.cu")
+    compile_command = [
+        "nvcc", "-O3", "-std=c++20",
+        cpp_file, "-o", executable
+    ]
+else:
+    cpp_file = str(Path(__file__).parent / "smoluchowski.cpp")
+    compile_command = [
+        "g++", "-O3", "-std=c++20",
+        "-fopenmp", 
+        "-march=native",
+        "-funsafe-math-optimizations",
+        cpp_file, "-o", executable
     ]
 #compile_command = ["nvcc", "-std=c++20", cpp_file, "-o", executable, "-O3"]
 try:
@@ -119,8 +127,7 @@ z, r = allocator.fields["c"].shape
 W_arr = np.zeros((z,r), dtype="int8")
 W_arr[z//2-10:z//2+10, 20:-1]=1
 U_arr = np.zeros((z,r), dtype="float32")
-#U_arr[z//2-10:z//2+10, :20]=-1
-# D_arr = np.ones((1000, 1000))
+U_arr[z//2-10:z//2+10, :20]=-1
 #%%
 initialize_shared_memory(allocator, W_arr=W_arr, U_arr=U_arr)
 #%%
@@ -248,7 +255,7 @@ class SharedMemoryPlotApp(tk.Tk):
 # Run the application
 if __name__ == "__main__":
     if USE_CUDA:
-        app = SharedMemoryPlotApp(subprocess_cmd=[executable, "300000", "5000"])
+        app = SharedMemoryPlotApp(subprocess_cmd=[executable, "1000000", "5000"])
     else:
         app = SharedMemoryPlotApp(subprocess_cmd=[executable, "300000"])
     app.mainloop()
