@@ -2,6 +2,7 @@
 #include <cstdlib> // For std::atoi
 #include <chrono> // For benchmarking
 #include <cuda_runtime.h>
+#include <memory> // For std::unique_ptr
 #include "../src/shared_memory_access.hpp"
 
 using SharedMemoryAccess::Fields::c; // concentration
@@ -17,7 +18,32 @@ ArrayType temp{0}; // local temporary array
 __device__ __constant__ float d_dt;
 __device__ __constant__ float d_timestep;
 
-// Apply boundary conditions
+// Pitch size width in bytes of the allocated memory for a single row, for memory alignment
+// Must be the same for all arrays
+size_t pitch;
+
+// Define CUDA block and grid sizes
+// For 2D stencil operations
+dim3 blockSize(16, 16);
+dim3 gridSize((Cols + blockSize.x - 1) / blockSize.x, (Rows + blockSize.y - 1) / blockSize.y);
+
+// Define CUDA block and grid sizes
+// For 1D linear operations
+const int blockSize1D(256);
+const int gridSize1D((std::max(Rows, Cols) + blockSize1D-1) / blockSize1D);
+
+// Allocate device memory with automatic cleanup using std::unique_ptr
+auto make_unique_ptr_cuda(){
+    return std::unique_ptr<float, decltype(&cudaFree)>(
+        [&]{
+            float* ptr; 
+            cudaMallocPitch((void**)&ptr, &pitch, Cols * sizeof(float), Rows); 
+            return ptr;}(), 
+            cudaFree
+        );
+}
+
+// Apply boundary conditions to grid edges
 __global__ void apply_boundary_conditions(float* d_c, size_t pitch) {
     constexpr float source_value = 1.0f;
     constexpr float sink_value = 0.0f;
@@ -39,7 +65,7 @@ __global__ void apply_boundary_conditions(float* d_c, size_t pitch) {
     }
 }
 
-// Perform diffusion
+// Perform diffusion step on the grid
 __global__ void perform_diffusion(const float* d_c, float* d_temp, size_t pitch) {
     int i = threadIdx.y + blockIdx.y * blockDim.y;
     int j = threadIdx.x + blockIdx.x * blockDim.x;
@@ -58,7 +84,9 @@ __global__ void perform_diffusion(const float* d_c, float* d_temp, size_t pitch)
     }
 }
 
+
 int main(int argc, char* argv[]) {
+    // Validate and parse command-line arguments
     if (argc != 3) {
         std::cerr << "Usage: " << argv[0] << " <number of iterations> <update_every>" << std::endl;
         return 1;
@@ -70,102 +98,46 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    dim3 blockSize(16, 16);
-    dim3 gridSize((Cols + blockSize.x - 1) / blockSize.x, (Rows + blockSize.y - 1) / blockSize.y);
+    // Allocate device memory
+    auto d_c = make_unique_ptr_cuda();
+    auto d_temp = make_unique_ptr_cuda();
 
-    float* d_c;
-    float* d_temp;
-    size_t pitch; //width of a row in bytes when allocating 2D memory on a CUDA device
+    // Copy constants to device
+    cudaMemcpyToSymbol(d_dt, &dt, sizeof(float));
+    cudaMemcpyToSymbol(d_timestep, &timestep, sizeof(float));
 
-    {
-    if (cudaMallocPitch((void**)&d_c, &pitch, Cols * sizeof(float), Rows) != cudaSuccess) {
-        std::cerr << "Error: Failed to allocate device memory for d_c." << std::endl;
-        return 1;
-    }
+    // Copy initial data to device memory
+    cudaMemcpy2D(d_c.get(), pitch, c, Cols * sizeof(float), Cols * sizeof(float), Rows, cudaMemcpyHostToDevice);
 
-    if (cudaMallocPitch((void**)&d_temp, &pitch, Cols * sizeof(float), Rows) != cudaSuccess) {
-        std::cerr << "Error: Failed to allocate device memory for d_temp." << std::endl;
-        cudaFree(d_c);
-        return 1;
-    }
-
-    if (cudaMemcpyToSymbol(d_dt, &dt, sizeof(float)) != cudaSuccess) {
-        std::cerr << "Error: Failed to copy dt to device constant memory." << std::endl;
-        cudaFree(d_c);
-        cudaFree(d_temp);
-        return 1;
-    }
-
-    if (cudaMemcpyToSymbol(d_timestep, &timestep, sizeof(float)) != cudaSuccess) {
-        std::cerr << "Error: Failed to copy timestep to device constant memory." << std::endl;
-        cudaFree(d_c);
-        cudaFree(d_temp);
-        return 1;
-    }
-
-    if (cudaMemcpy2D(d_c, pitch, c, Cols * sizeof(float), Cols * sizeof(float), Rows, cudaMemcpyHostToDevice) != cudaSuccess) {
-        std::cerr << "Error: Failed to copy c to device memory." << std::endl;
-        cudaFree(d_c);
-        cudaFree(d_temp);
-        return 1;
-    }
-    }
-
+    // Start benchmarking
     auto start_time = std::chrono::high_resolution_clock::now();
 
+    // Main computation loop
     for (int iter = 0; iter < iterations; ++iter) {
-        
-        perform_diffusion<<<gridSize, blockSize>>>(d_c, d_temp, pitch);
-        // if (cudaDeviceSynchronize() != cudaSuccess) {
-        //     std::cerr << "Error: Failed to synchronize after perform_diffusion kernel." << std::endl;
-        //     cudaFree(d_c);
-        //     cudaFree(d_temp);
-        //     return 1;
-        // }
+        perform_diffusion<<<gridSize, blockSize>>>(d_c.get(), d_temp.get(), pitch);
+        apply_boundary_conditions<<<gridSize1D, blockSize1D>>>(d_temp.get(), pitch);
 
         std::swap(d_c, d_temp);
-
-        apply_boundary_conditions<<<(std::max(Rows, Cols) + 255) / 256, 256>>>(d_c, pitch);
-        // if (cudaDeviceSynchronize() != cudaSuccess) {
-        //     std::cerr << "Error: Failed to synchronize after apply_boundary_conditions kernel." << std::endl;
-        //     cudaFree(d_c);
-        //     cudaFree(d_temp);
-        //     return 1;
-        // }
-
         timestep += dt;
-        // if (cudaMemcpyToSymbol(d_timestep, &timestep, sizeof(float)) != cudaSuccess) {
-        //     std::cerr << "Error: Failed to update timestep in device constant memory." << std::endl;
-        //     cudaFree(d_c);
-        //     cudaFree(d_temp);
-        //     return 1;
-        // }
 
+        // Periodically update results on host
         if ((iter + 1) % update_every == 0) {
-            if (cudaMemcpy2D(c, Cols * sizeof(float), d_c, pitch, Cols * sizeof(float), Rows, cudaMemcpyDeviceToHost) != cudaSuccess) {
-                std::cerr << "Error: Failed to copy c from device to host." << std::endl;
-                cudaFree(d_c);
-                cudaFree(d_temp);
-                return 1;
-            }
+            cudaDeviceSynchronize();
+            cudaMemcpyToSymbol(d_timestep, &timestep, sizeof(float));
+            cudaMemcpy2D(c, Cols * sizeof(float), d_c.get(), pitch, Cols * sizeof(float), Rows, cudaMemcpyDeviceToHost);
         }
     }
 
-    if (cudaMemcpy2D(c, Cols * sizeof(float), d_c, pitch, Cols * sizeof(float), Rows, cudaMemcpyDeviceToHost) != cudaSuccess) {
-        std::cerr << "Error: Failed to copy c from device to host." << std::endl;
-        cudaFree(d_c);
-        cudaFree(d_temp);
-        return 1;
-    }
+    cudaDeviceSynchronize();
+    cudaMemcpyToSymbol(d_timestep, &timestep, sizeof(float));
+    cudaMemcpy2D(c, Cols * sizeof(float), d_c.get(), pitch, Cols * sizeof(float), Rows, cudaMemcpyDeviceToHost);
 
+     // End benchmarking
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_seconds = end_time - start_time;
 
     std::cout << "Done, " << iterations << " iterations in "
               << elapsed_seconds.count() << " seconds." << std::endl;
-
-    cudaFree(d_c);
-    cudaFree(d_temp);
 
     return 0;
 }
