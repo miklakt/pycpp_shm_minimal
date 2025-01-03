@@ -62,9 +62,9 @@
         "shape": [400,200]
     },
     {
-    "name": "div_J",
-    "type": "float32",
-    "shape": [400,200]
+        "name": "div_J",
+        "type": "float32",
+        "shape": [400,200]
     }
   ]
 }
