@@ -52,6 +52,16 @@ auto make_unique_ptr_cuda(){
         );
 }
 
+auto make_unique_ptr_1D_column_vector_cuda(){
+        return std::unique_ptr<float, decltype(&cudaFree)>(
+        [&]{
+            float* ptr; 
+            cudaMalloc((void**)&ptr, Rows * sizeof(float)); 
+            return ptr;}(), 
+            cudaFree
+        );
+}
+
 // Apply boundary conditions to grid edges
 __global__ void apply_boundary_conditions(float* d_c, size_t pitch) {
     constexpr float source_value = 1.0f;
@@ -72,10 +82,6 @@ __global__ void apply_boundary_conditions(float* d_c, size_t pitch) {
         row_start[0] = row_start[1];
         row_start[Cols - 1] = row_start[Cols - 2];
     }
-}
-
-__device__ inline float* get_row(float* base_ptr, int row_index, size_t pitch) {
-    return (float*)((char*)base_ptr + row_index * pitch);
 }
 
 #define ACCESS_2D(ptr, i, j, pitch) ((float*)((char*)ptr + (i) * pitch))[j]
@@ -136,7 +142,7 @@ __global__ void drift_diffusion(
         float J_N = J_dif_n + J_adv_n;
         float J_S = J_dif_s + J_adv_s;
 
-        float J_tot = -J_E + J_W - ACCESS_2D(d_lambda_n, i, j, pitch) * J_N + ACCESS_2D(d_lambda_s, i, j, pitch) * J_S;
+        float J_tot = -J_E + J_W - d_lambda_n[j] * J_N + d_lambda_s[j] * J_S;
 
         // Update divergence of flux and concentration
         ACCESS_2D(d_div_J, i, j, pitch) = -J_tot;
@@ -146,9 +152,13 @@ __global__ void drift_diffusion(
 
 // Macro for allocating and copying data to device memory
 // Creates pointer to an array on the device with a prefix d_
-#define ALLOC_AND_COPY_TO_DEVICE(X)                                           \
+#define ALLOC2D_AND_COPY_TO_DEVICE(X)                                           \
     auto d_##X = make_unique_ptr_cuda();                         \
     cudaMemcpy2D(d_##X.get(), pitch, X, Cols * sizeof(float), Cols * sizeof(float), Rows, cudaMemcpyHostToDevice);
+
+#define ALLOC1D_AND_COPY_TO_DEVICE(X)                                           \
+    auto d_##X = make_unique_ptr_1D_column_vector_cuda();                         \
+    cudaMemcpy(d_##X.get(), X, Rows * sizeof(float), cudaMemcpyHostToDevice);
 
 
 int main(int argc, char* argv[]) {
@@ -169,17 +179,18 @@ int main(int argc, char* argv[]) {
     cudaMemcpyToSymbol(d_timestep, &timestep, sizeof(float));
 
     // Allocate and copy to device memory
-    ALLOC_AND_COPY_TO_DEVICE(c);
-    ALLOC_AND_COPY_TO_DEVICE(c_next);
-    ALLOC_AND_COPY_TO_DEVICE(D_x);
-    ALLOC_AND_COPY_TO_DEVICE(D_y);
-    ALLOC_AND_COPY_TO_DEVICE(dU_x);
-    ALLOC_AND_COPY_TO_DEVICE(dU_y);
-    ALLOC_AND_COPY_TO_DEVICE(alpha_x);
-    ALLOC_AND_COPY_TO_DEVICE(alpha_y);
-    ALLOC_AND_COPY_TO_DEVICE(lambda_n);
-    ALLOC_AND_COPY_TO_DEVICE(lambda_s);
-    ALLOC_AND_COPY_TO_DEVICE(div_J);
+    ALLOC2D_AND_COPY_TO_DEVICE(c);
+    ALLOC2D_AND_COPY_TO_DEVICE(c_next);
+    ALLOC2D_AND_COPY_TO_DEVICE(D_x);
+    ALLOC2D_AND_COPY_TO_DEVICE(D_y);
+    ALLOC2D_AND_COPY_TO_DEVICE(dU_x);
+    ALLOC2D_AND_COPY_TO_DEVICE(dU_y);
+    ALLOC2D_AND_COPY_TO_DEVICE(alpha_x);
+    ALLOC2D_AND_COPY_TO_DEVICE(alpha_y);
+    ALLOC2D_AND_COPY_TO_DEVICE(div_J);
+
+    ALLOC1D_AND_COPY_TO_DEVICE(lambda_n);
+    ALLOC1D_AND_COPY_TO_DEVICE(lambda_s);
 
     // Start benchmarking
     auto start_time = std::chrono::high_resolution_clock::now();

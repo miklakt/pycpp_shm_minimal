@@ -49,12 +49,12 @@
     {
         "name": "lambda_n",
         "type": "float32",
-        "shape": [400,200]
+        "shape": [200]
     },
     {
         "name": "lambda_s",
         "type": "float32",
-        "shape": [400,200]
+        "shape": [200]
     },
     {
         "name": "c_next",

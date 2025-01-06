@@ -88,7 +88,7 @@ void drift_diffusion() {
             auto J_N = J_dif_n + J_adv_n;
             auto J_S = J_dif_s + J_adv_s;
 
-            auto J_tot = -J_E + J_W - lambda_n[i][j] * J_N + lambda_s[i][j] * J_S;
+            auto J_tot = -J_E + J_W - lambda_n[j] * J_N + lambda_s[j] * J_S;
 
             div_J[i][j] = -J_tot;       // Update divergence of flux
             c_next[i][j] = c_P + J_tot * dt; // Update concentration
