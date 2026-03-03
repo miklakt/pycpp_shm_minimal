@@ -16,9 +16,9 @@ This project uses a shared-memory contract that is defined once and consumed by 
 
 1. A JSON layout defines variables/arrays and their types.
 2. Python (`shm_allocator.py`) allocates shared memory and maps NumPy views.
-3. Python generates `src/shared_memory_layout.hxx` from that layout.
-4. C++ reads the generated header and accesses fields via type tags.
-5. Solver updates data in shared memory; Python reads and plots it live.
+3. Python generates a `shared_memory_layout.hxx` header.
+4. C++ reads that generated header (selected at compile time) and accesses fields via type tags.
+5. The compiled C++ code updates shared memory; Python reads and plots it live (or vice versa).
 
 Because the header is generated, both sides always agree on offsets, names, and types.
 
@@ -35,7 +35,10 @@ Path: `diffusion/`
 2. **Smoluchowski / drift-diffusion equation** time integration  
 Path: `smoluchowski/`
 
-Both examples follow the same pattern:
+3. **C++ shared-memory access examples**  
+Path: `cpp_examples/`
+
+The simulation examples follow the same pattern:
 - define shared-memory layout in JSON,
 - generate C++ header from Python,
 - compile C++/CUDA executable,
@@ -43,7 +46,7 @@ Both examples follow the same pattern:
 
 ## CUDA Support
 
-CUDA is supported in both examples.
+CUDA is supported in both simulation examples.
 
 - `diffusion/diffusion.py` has `USE_CUDA = True/False`
 - `smoluchowski/smoluchowski.py` has `USE_CUDA = True/False`
@@ -75,10 +78,29 @@ python3 diffusion/diffusion.py
 python3 smoluchowski/smoluchowski.py
 ```
 
+### Run C++ access examples
+
+```bash
+# Terminal 1 (keep running)
+python3 cpp_examples/create_shared_memory.py
+
+# Terminal 2
+mkdir -p cpp_examples/bin
+g++ -std=c++20 -O3 -DSHM_DISABLE_FIELD_ALIASES -DSHM_LAYOUT_HEADER=\"../cpp_examples/shared_memory_layout.hxx\" cpp_examples/access_by_name_example.cpp -o cpp_examples/bin/access_by_name_example
+g++ -std=c++23 -O3 -I/usr/include/eigen3 -DSHM_DISABLE_FIELD_ALIASES -DSHM_LAYOUT_HEADER=\"../cpp_examples/shared_memory_layout.hxx\" cpp_examples/eigen_map_example.cpp -o cpp_examples/bin/eigen_map_example
+./cpp_examples/bin/access_by_name_example
+```
+
 ## Key Files
 
 - `shm_allocator.py`: shared-memory allocation + C++ header generation
+- `cpp_examples/create_shared_memory.py`: creates C++-example shared memory + header
 - `src/shared_memory_access.hpp`: typed access to shared-memory fields in C++
-- `src/shared_memory_layout.hxx`: auto-generated memory layout header
-- `diffusion/*`: diffusion model (CPU and CUDA)
-- `smoluchowski/*`: drift-diffusion model (CPU and CUDA)
+- `cpp_examples/access_by_name_example.cpp`: basic C++ field access by tag/name
+- `cpp_examples/eigen_map_example.cpp`: Eigen mapping example on shared-memory fields
+- `cpp_examples/eigen_map.hpp`: Eigen helper utilities for shared-memory arrays
+- `cpp_examples/shm_layout_example.json`: layout spec for C++ access examples
+- `diffusion/*`: diffusion model
+- `diffusion/shm_layout.json`: layout spec for diffusion example
+- `smoluchowski/*`: drift-diffusion model
+- `smoluchowski/shm_layout.json`: layout spec for smoluchowski example

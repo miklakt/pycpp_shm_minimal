@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <cstddef>
 
-#include "shared_memory_access.hpp"
+#include "../src/shared_memory_access.hpp"
 
 namespace SharedMemoryAccess {
 // Generalized wrapper function for 1D and 2D arrays

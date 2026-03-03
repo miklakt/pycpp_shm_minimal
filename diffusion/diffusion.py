@@ -1,8 +1,10 @@
 # %%
 import sys
 from pathlib import Path
-parent_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(parent_dir))
+script_dir = Path(__file__).parent
+project_root = script_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
 import subprocess
 from shm_allocator import SharedMemoryAllocator
 import numpy as np
@@ -12,30 +14,31 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 # %%
-# Setup paths
-parent_dir = Path(__file__).resolve().parent.parent
-sys.path.append(str(parent_dir))
-
 # Initialize Shared Memory Allocator
-allocator = SharedMemoryAllocator(Path(__file__).parent / "shm_layout.json", create_new=True)
-allocator.generate_cpp_header(parent_dir / "src/shared_memory_layout.hxx")
+allocator = SharedMemoryAllocator(script_dir / "shm_layout.json", create_new=True)
+layout_header = script_dir / "shared_memory_layout.hxx"
+allocator.generate_cpp_header(layout_header)
 allocator.fields["dt"][...] = 0.1
 # %%
 #==============
 USE_CUDA = True
 #==============
 
-executable = str(Path(__file__).parent / "bin" / "diffusion")
+layout_define = f'-DSHM_LAYOUT_HEADER="../{Path(__file__).stem}/shared_memory_layout.hxx"'
+
+executable = str(script_dir / "bin" / "diffusion")
 if USE_CUDA:
-    cpp_file = str(Path(__file__).parent / "diffusion.cu")
+    cpp_file = str(script_dir / "diffusion.cu")
     compile_command = [
         "nvcc", "-O3", "-std=c++20",
+        layout_define,
         cpp_file, "-o", executable
     ]
 else:
-    cpp_file = str(Path(__file__).parent / "diffusion.cpp")
+    cpp_file = str(script_dir / "diffusion.cpp")
     compile_command = [
         "g++", "-O3", "-std=c++20",
+        layout_define,
         "-fopenmp", 
         "-march=native",
         "-funsafe-math-optimizations",

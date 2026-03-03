@@ -245,20 +245,3 @@ class SharedMemoryAllocator:
         code = "\n".join(lines)
         Path(output_file).write_text(code, encoding="utf-8")
         print(f"[SharedMemoryAllocator] Generated C++ header: {output_file}")
-
-
-#%%
-if __name__ == "__main__":
-    allocator = SharedMemoryAllocator("shm_layout_example.json", create_new=True)
-    #%%
-    print("Fields in new shared memory:", list(allocator.fields.keys()))
-    print("myint =", allocator.fields["myint"])
-    print("myarr =\n", allocator.fields["myarr"])
-    print("myarr2 =\n", allocator.fields["myarr2"])
-    # Do not close/unlink yet if we want another process to attach...
-    # allocator_new.close()
-    # %%
-    allocator.generate_cpp_header("src/shared_memory_layout.hxx")
-    # %%
-    allocator.close()
-    # %%

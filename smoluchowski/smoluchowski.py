@@ -1,12 +1,15 @@
 #%%
 import numpy as np
+from pathlib import Path
 from configure import *
 from real_time_plot import create_renderer
 #%%
 USE_CUDA = False
-allocator = SharedMemoryAllocator(Path(__file__).parent / "shm_layout.json", create_new=True)
-allocator.generate_cpp_header(parent_dir/"src/shared_memory_layout.hxx")
-executable = compile_cpp(USE_CUDA)
+script_dir = Path(__file__).parent
+allocator = SharedMemoryAllocator(script_dir / "shm_layout.json", create_new=True)
+layout_header = script_dir / "shared_memory_layout.hxx"
+allocator.generate_cpp_header(layout_header)
+executable = compile_cpp(USE_CUDA, layout_header=f'../{Path(__file__).stem}/shared_memory_layout.hxx')
 #%%
 allocator.fields["dt"][...] = 0.1 #timestep
 

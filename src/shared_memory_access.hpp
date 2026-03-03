@@ -5,7 +5,11 @@
 #include <fcntl.h>
 #include <cstring>
 #include <memory>
-#include "shared_memory_layout.hxx"
+
+#ifndef SHM_LAYOUT_HEADER
+#define SHM_LAYOUT_HEADER "shared_memory_layout.hxx"
+#endif
+#include SHM_LAYOUT_HEADER
 
 
 
@@ -112,8 +116,10 @@ namespace SharedMemoryAccess {
         return *reinterpret_cast<NewArrayType* >(&flatten_array);
 
     }
+#ifndef SHM_DISABLE_FIELD_ALIASES
     namespace Fields{
         MAP_ALL_SHARED_MEMORY_FIELDS
 
     }
+#endif
 } // namespace SharedMemoryAccess

@@ -86,19 +86,25 @@ def initialize_shared_memory(allocator_, W_arr=None, U_arr=None, D_arr=None):
 
     print("Shared memory fields initialized.")
 
-def compile_cpp(USE_CUDA):
+def compile_cpp(USE_CUDA, layout_header=None):
+    if layout_header is None:
+        layout_header = "../smoluchowski/shared_memory_layout.hxx"
+    layout_define = f'-DSHM_LAYOUT_HEADER="{Path(layout_header).as_posix()}"'
+
     cpp_file = str(Path(__file__).parent / "smoluchowski.cpp")
     executable = str(Path(__file__).parent / "bin" / "smoluchowski")
     if USE_CUDA:
         cpp_file = str(Path(__file__).parent / "smoluchowski.cu")
         compile_command = [
             "nvcc", "-O3", "-std=c++20",
+            layout_define,
             cpp_file, "-o", executable
         ]
     else:
         cpp_file = str(Path(__file__).parent / "smoluchowski.cpp")
         compile_command = [
             "g++", "-O3", "-std=c++20",
+            layout_define,
             "-fopenmp", 
             "-march=native",
             "-funsafe-math-optimizations",
