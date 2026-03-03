@@ -175,9 +175,9 @@ class SharedMemoryPlotApp(tk.Tk):
 # Run the application
 if __name__ == "__main__":
     if USE_CUDA:
-        app = SharedMemoryPlotApp(subprocess_cmd=[executable, "300000", "5000"])
+        app = SharedMemoryPlotApp(subprocess_cmd=[executable, "3000000", "1000"])
     else:
-        app = SharedMemoryPlotApp(subprocess_cmd=[executable, "300000"])
+        app = SharedMemoryPlotApp(subprocess_cmd=[executable, "3000000"])
     app.mainloop()
     #%%
     print("Subprocess finished. Closing application.")
