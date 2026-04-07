@@ -1,0 +1,47 @@
+{
+  "shm_name": "wave_shm",
+  "variables": [
+    {
+      "name": "dt",
+      "type": "float32"
+    },
+    {
+      "name": "timestep",
+      "type": "float32"
+    },
+    {
+      "name": "spring_k",
+      "type": "float32"
+    },
+    {
+      "name": "oscillator_frequency",
+      "type": "float32"
+    }
+  ],
+  "arrays": [
+    {
+      "name": "z",
+      "type": "float32",
+      "shape": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "z_prev",
+      "type": "float32",
+      "shape": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "mass",
+      "type": "float32",
+      "shape": [
+        512,
+        512
+      ]
+    }
+  ]
+}

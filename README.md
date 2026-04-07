@@ -35,7 +35,10 @@ Path: `diffusion/`
 2. **Smoluchowski / drift-diffusion equation** time integration  
 Path: `smoluchowski/`
 
-3. **C++ shared-memory access examples**  
+3. **Wave propagation in 2D cellular automata**  
+Path: `wave/`
+
+4. **C++ shared-memory access examples**  
 Path: `cpp_examples/`
 
 The simulation examples follow the same pattern:
@@ -76,6 +79,18 @@ python3 diffusion/diffusion.py
 
 ```bash
 python3 smoluchowski/smoluchowski.py
+```
+
+### Run wave double slit example
+
+```bash
+python3 wave/double_slit.py
+```
+
+### Run wave prism example
+
+```bash
+python3 wave/prism.py
 ```
 
 ### Run C++ access examples

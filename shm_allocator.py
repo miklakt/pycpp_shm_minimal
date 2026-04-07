@@ -183,6 +183,7 @@ class SharedMemoryAllocator:
         lines.append("// This file is AUTO-GENERATED from the SharedMemoryAllocator class. Do not edit manually.")
         lines.append("#pragma once")
         lines.append("#include <cstddef>")
+        lines.append("#include <cstdint>")
         lines.append("")
         spec = json.loads(Path(self.spec_file).read_text())
         lines.append(f'inline constexpr const char* SHM_NAME = "{spec["shm_name"]}";')
